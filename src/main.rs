@@ -138,13 +138,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             tx.sign(&vec![
                 signer,
             ], rpc_client.get_latest_blockhash().await?);
-            match rpc_client.simulate_transaction_with_config(&tx, RpcSimulateTransactionConfig {
-                sig_verify: false,
-                replace_recent_blockhash: true,
-                inner_instructions: true,
-                ..Default::default()
-            }).await {
-                Ok(sig) => println!("sent tx {:#?}", sig.value),
+            match rpc_client.send_and_confirm_transaction_with_spinner(&tx).await {
+                Ok(sig) => println!("sent tx {sig}"),
                 Err(err) => {
                     println!("failed to send tx {err:#?}")
                 }
