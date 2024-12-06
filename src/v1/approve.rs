@@ -16,7 +16,7 @@ impl ApproveAccounts {
     pub fn to_account_metas(&self) -> Vec<AccountMeta> {
         vec![
             AccountMeta::new_readonly(self.multisig, false),
-            AccountMeta::new_readonly(self.transaction, false),
+            AccountMeta::new(self.transaction, false),
             AccountMeta::new(self.owner, true),
         ]
     }
