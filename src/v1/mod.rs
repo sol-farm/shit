@@ -1,5 +1,6 @@
 pub mod create_transaction;
 pub mod approve;
+pub mod execute;
 
 use solana_sdk::{instruction::AccountMeta, pubkey::Pubkey};
 
@@ -25,4 +26,23 @@ impl From<TransactionAccount> for AccountMeta {
             true => AccountMeta::new(account.pubkey, account.is_signer),
         }
     }
+}
+
+#[derive(borsh::BorshSerialize, borsh::BorshDeserialize)]
+pub struct MultisigTx {
+    __discriminator: [u8; 8],
+    // The multisig account this transaction belongs to.
+    multisig: Pubkey,
+    // Target program to execute against.
+    pub program_id: Pubkey,
+    // Accounts requried for the transaction.
+    pub accounts: Vec<TransactionAccount>,
+    // Instruction data for the transaction.
+    data: Vec<u8>,
+    // signers[index] is true iff multisig.owners[index] signed the transaction.
+    signers: Vec<bool>,
+    // Boolean ensuring one time execution.
+    did_execute: bool,
+    // Owner set sequence number.
+    owner_set_seqno: u32,
 }

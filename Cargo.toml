@@ -18,3 +18,7 @@ version = "2"
 version = "1.18"
 [dependencies.solana-clap-utils]
 version = "1.18"
+[dependencies.base64]
+version = "0.22"
+[dependencies.bincode]
+version = "1"
