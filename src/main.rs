@@ -1,5 +1,5 @@
 use borsh::BorshDeserialize;
-use solana_client::{nonblocking::rpc_client::RpcClient, rpc_config::RpcSimulateTransactionConfig};
+use solana_client::{nonblocking::rpc_client::RpcClient, rpc_config::{RpcSendTransactionConfig, RpcSimulateTransactionConfig}};
 use solana_sdk::{bpf_loader_upgradeable, instruction::Instruction, signature::Keypair, signer::Signer, system_instruction, transaction::{Transaction, VersionedTransaction}};
 use clap::{App, Arg, SubCommand};
 use base64::{engine::general_purpose::STANDARD, Engine};
@@ -170,7 +170,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         &tx_account.pubkey(),
                         rpc_client.get_minimum_balance_for_rent_exemption(1_000).await?,
                         1_000,
-                        &v1::ID
+                        &if use_v2 {
+                            v2::ID
+                        } else {
+                            v1::ID
+                        }
                     ),
                     ix,
                 ],
@@ -239,7 +243,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         &tx_account.pubkey(),
                         rpc_client.get_minimum_balance_for_rent_exemption(1_000).await?,
                         1_000,
-                        &v1::ID
+                        &if use_v2 {
+                            v2::ID
+                        } else {
+                            v1::ID
+                        }
                     ),
                     ix,
                 ],
