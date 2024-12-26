@@ -7,6 +7,7 @@ use solana_remote_wallet::{locator::Locator, remote_keypair::generate_remote_key
 use solana_clap_utils::keypair::signer_from_path;
 use v1::{approve::{ApproveAccounts, ApproveTransaction}, create_transaction::{CreateTransaction, CreateTransactionAccounts, CreateTransactionData}, execute::{ExecuteAccounts, ExecuteTransaction}, MultisigTx};
 pub mod v1;
+pub mod v2;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -25,6 +26,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .value_name("KEYPAIR")
         .help("specifies the keypair to use for signing transactions")
         .required(false)
+    )
+    .arg(    Arg::with_name("v2")
+            .long("v2")
+            .help("use v2 instructions")
+            .takes_value(false)
+            .required(false),
     )
     .subcommand(
         SubCommand::with_name("set-buffer-auth")
@@ -111,7 +118,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let kp = matches.value_of("keypair").unwrap();
     let rpc_url = matches.value_of("rpc-url").unwrap();
     let rpc_client = RpcClient::new(rpc_url.to_string());
-
+    let use_v2 = matches.is_present("v2");
     let mut wallet_manager = remote_wallet::maybe_wallet_manager().unwrap();
     let signer = signer_from_path(&matches, kp, kp, &mut wallet_manager).unwrap();
 
@@ -122,20 +129,40 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let current_auth = sba.value_of("current-auth").unwrap();
             let new_auth = sba.value_of("new-auth").unwrap();
             let tx_account = Keypair::new();
-            let tx_data: CreateTransactionData = From::from(bpf_loader_upgradeable::set_buffer_authority(
-                &buffer.parse().unwrap(),
-                &current_auth.parse().unwrap(),
-                &new_auth.parse().unwrap(),
-            ));
-            let tx_accounts = CreateTransactionAccounts {
-                multisig: multisig.parse().unwrap(),
-                transaction: tx_account.pubkey(),
-                proposer: signer.pubkey(),
+            let ix = if use_v2 {
+                let tx_data: v2::create_transaction::CreateTransactionData = From::from(bpf_loader_upgradeable::set_buffer_authority(
+                    &buffer.parse().unwrap(),
+                    &current_auth.parse().unwrap(),
+                    &new_auth.parse().unwrap(),
+                ));
+                let tx_accounts = v2::create_transaction::CreateTransactionAccounts {
+                    multisig: multisig.parse().unwrap(),
+                    transaction: tx_account.pubkey(),
+                    proposer: signer.pubkey(),
+                };
+                let ix = v2::create_transaction::CreateTransaction {
+                    data: tx_data,
+                    accounts: tx_accounts,
+                }.instruction();
+                ix
+            } else {
+                let tx_data: CreateTransactionData = From::from(bpf_loader_upgradeable::set_buffer_authority(
+                    &buffer.parse().unwrap(),
+                    &current_auth.parse().unwrap(),
+                    &new_auth.parse().unwrap(),
+                ));
+                let tx_accounts = CreateTransactionAccounts {
+                    multisig: multisig.parse().unwrap(),
+                    transaction: tx_account.pubkey(),
+                    proposer: signer.pubkey(),
+                };
+                let ix = CreateTransaction {
+                    data: tx_data,
+                    accounts: tx_accounts,
+                }.instruction();
+                ix
             };
-            let ix = CreateTransaction {
-                data: tx_data,
-                accounts: tx_accounts,
-            }.instruction();
+
             let mut tx = Transaction::new_with_payer(
                 &[
                     system_instruction::create_account(
@@ -171,20 +198,40 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let current_auth = sba.value_of("current-auth").unwrap();
             let new_auth = sba.value_of("new-auth").unwrap();
             let tx_account = Keypair::new();
-            let tx_data: CreateTransactionData = From::from(bpf_loader_upgradeable::set_upgrade_authority(
-                &program.parse().unwrap(),
-                &current_auth.parse().unwrap(),
-                Some(&new_auth.parse().unwrap()),
-            ));
-            let tx_accounts = CreateTransactionAccounts {
-                multisig: multisig.parse().unwrap(),
-                transaction: tx_account.pubkey(),
-                proposer: signer.pubkey(),
+            let ix = if use_v2 {
+                let tx_data: v2::create_transaction::CreateTransactionData = From::from(bpf_loader_upgradeable::set_upgrade_authority(
+                    &program.parse().unwrap(),
+                    &current_auth.parse().unwrap(),
+                    Some(&new_auth.parse().unwrap()),
+                ));
+                let tx_accounts = v2::create_transaction::CreateTransactionAccounts {
+                    multisig: multisig.parse().unwrap(),
+                    transaction: tx_account.pubkey(),
+                    proposer: signer.pubkey(),
+                };
+                let ix = v2::create_transaction::CreateTransaction {
+                    data: tx_data,
+                    accounts: tx_accounts,
+                }.instruction();
+                ix
+            } else {
+                let tx_data: CreateTransactionData = From::from(bpf_loader_upgradeable::set_upgrade_authority(
+                    &program.parse().unwrap(),
+                    &current_auth.parse().unwrap(),
+                    Some(&new_auth.parse().unwrap()),
+                ));
+                let tx_accounts = CreateTransactionAccounts {
+                    multisig: multisig.parse().unwrap(),
+                    transaction: tx_account.pubkey(),
+                    proposer: signer.pubkey(),
+                };
+                let ix = CreateTransaction {
+                    data: tx_data,
+                    accounts: tx_accounts,
+                }.instruction();
+                ix
             };
-            let ix = CreateTransaction {
-                data: tx_data,
-                accounts: tx_accounts,
-            }.instruction();
+
             let mut tx = Transaction::new_with_payer(
                 &[
                     system_instruction::create_account(
@@ -217,15 +264,25 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         ("approve", Some(ap)) => {
             let multisig= ap.value_of("multisig").unwrap();
             let transaction = ap.value_of("transaction").unwrap();
+            let ix = if use_v2 {
+                v2::approve::ApproveTransaction {
+                    accounts: v2::approve::ApproveAccounts {
+                        multisig: multisig.parse().unwrap(),
+                        transaction: transaction.parse().unwrap(),
+                        owner: signer.pubkey(),
+                        },
+                    }.instruction()
+            } else {
+                ApproveTransaction {
+                    accounts: ApproveAccounts {
+                        multisig: multisig.parse().unwrap(),
+                        transaction: transaction.parse().unwrap(),
+                        owner: signer.pubkey(),
+                        },
+                    }.instruction()
+            };
             let mut tx = Transaction::new_with_payer(
-                &[ApproveTransaction {
-                accounts: ApproveAccounts {
-                    multisig: multisig.parse().unwrap(),
-                    transaction: transaction.parse().unwrap(),
-                    owner: signer.pubkey(),
-                    },
-                }.instruction()
-                ],
+                &[ix],
                 Some(&signer.pubkey())
             );
             tx.sign(&vec![
@@ -244,23 +301,35 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let multisig_signer= et.value_of("multisig-signer").unwrap();
             let transaction = et.value_of("transaction").unwrap();
 
-
-            let tx = MultisigTx::deserialize(&mut &rpc_client.get_account_data(&transaction.parse().unwrap()).await?[..]).unwrap();
+            let ix = if use_v2 {
+                let tx = v2::MultisigTx::deserialize(&mut &rpc_client.get_account_data(&transaction.parse().unwrap()).await?[..]).unwrap();
+                v2::execute::ExecuteTransaction {
+                    accounts: v2::execute::ExecuteAccounts {
+                        multisig: multisig.parse().unwrap(),
+                        multisig_signer: multisig_signer.parse().unwrap(),
+                        transaction: transaction.parse().unwrap(),
+                        },
+                    }.instruction(tx)
+            } else {
+                let tx = MultisigTx::deserialize(&mut &rpc_client.get_account_data(&transaction.parse().unwrap()).await?[..]).unwrap();
+                ExecuteTransaction {
+                    accounts: ExecuteAccounts {
+                        multisig: multisig.parse().unwrap(),
+                        multisig_signer: multisig_signer.parse().unwrap(),
+                        transaction: transaction.parse().unwrap(),
+                        },
+                    }.instruction(tx)
+            };
 
             let mut tx = Transaction::new_with_payer(
-                &[ExecuteTransaction {
-                accounts: ExecuteAccounts {
-                    multisig: multisig.parse().unwrap(),
-                    multisig_signer: multisig_signer.parse().unwrap(),
-                    transaction: transaction.parse().unwrap(),
-                    },
-                }.instruction(tx)
-                ],
+                &[ix],
                 Some(&signer.pubkey())
             );
             tx.sign(&vec![
                 signer,
             ], rpc_client.get_latest_blockhash().await?);
+            //let tx: VersionedTransaction = From::from(tx);
+            //tokio::fs::write("data.b64", STANDARD.encode(bincode::serialize(&tx).unwrap())).await?;
             match rpc_client.send_and_confirm_transaction_with_spinner(&tx).await {
                 Ok(sig) => println!("sent tx {sig}"),
                 Err(err) => {
